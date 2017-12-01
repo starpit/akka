@@ -353,6 +353,13 @@ private[remote] class Association(
               dropped(ControlQueueIndex, controlQueueSize, outboundEnvelope)
           case _ ⇒
             val queueIndex = selectQueue(recipient)
+
+            //            def msgClass = message match {
+            //              case ActorSelectionMessage(m, _, _) ⇒ m
+            //              case m                              ⇒ m
+            //            }
+            //            println(s"# selectQueue $msgClass -> $queueIndex") // FIXME
+
             val queue = queues(queueIndex)
             val offerOk = queue.offer(outboundEnvelope)
             if (!offerOk)
