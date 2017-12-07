@@ -31,7 +31,7 @@ object LargeMessageClusterMultiJvmSpec extends MultiNodeConfig {
       loggers = ["akka.testkit.TestEventListener"]
       actor.provider = cluster
 
-      testconductor.barrier-timeout = 60 s
+      testconductor.barrier-timeout = 3 minutes
 
       cluster.failure-detector.acceptable-heartbeat-pause = 3 s
 
@@ -41,14 +41,19 @@ object LargeMessageClusterMultiJvmSpec extends MultiNodeConfig {
         large-message-destinations = [ "/user/largeEcho" ]
 
         advanced {
-          idle-cpu-level = 1
+          #idle-cpu-level = 1
 
-          inbound-lanes = 1
+          #inbound-lanes = 1
 
           maximum-frame-size = 2 MiB
           buffer-pool-size = 32
           maximum-large-frame-size = 2 MiB
           large-buffer-pool-size = 32
+
+          compression {
+            actor-refs.advertisement-interval = 2 second
+            manifests.advertisement-interval = 2 second
+          }
         }
       }
     }
@@ -64,7 +69,7 @@ abstract class LargeMessageClusterSpec extends MultiNodeSpec(LargeMessageCluster
   with MultiNodeClusterSpec with ImplicitSender {
   import LargeMessageClusterMultiJvmSpec._
 
-  override def expectedTestDuration: FiniteDuration = 2.minutes
+  override def expectedTestDuration: FiniteDuration = 3.minutes
 
   def identify(role: RoleName, actorName: String): ActorRef = within(10.seconds) {
     system.actorSelection(node(role) / "user" / actorName) ! Identify(actorName)
@@ -95,23 +100,30 @@ abstract class LargeMessageClusterSpec extends MultiNodeSpec(LargeMessageCluster
       enterBarrier("actors-started")
 
       runOn(second) {
+        val echo3 = identify(third, "echo")
         val largeEcho3 = identify(third, "largeEcho")
 
         val largeMsgSize = 2 * 1000 * 1000
         val largeMsg = ("0" * largeMsgSize).getBytes("utf-8")
         val largeMsgBurst = 15
-        val repeat = 5
+        val repeat = 15
         for (n ← 1 to repeat) {
           val startTime = System.nanoTime()
           for (_ ← 1 to largeMsgBurst) {
             largeEcho3 ! largeMsg
           }
+
+          val ordinaryProbe = TestProbe()
+          echo3.tell(("0" * 1000).getBytes("utf-8"), ordinaryProbe.ref)
+          ordinaryProbe.expectMsgType[Array[Byte]]
+          val ordinaryDurationMs = (System.nanoTime() - startTime) / 1000 / 1000
+
           receiveN(largeMsgBurst, 20.seconds)
-          println(s"Burst $n took ${(System.nanoTime() - startTime) / 1000 / 1000} ms")
+          println(s"Burst $n took ${(System.nanoTime() - startTime) / 1000 / 1000} ms, ordinary $ordinaryDurationMs ms")
         }
       }
 
-      unreachableProbe.expectNoMessage(5.seconds)
+      unreachableProbe.expectNoMessage(25.seconds)
 
       enterBarrier("after-1")
     }
@@ -137,7 +149,7 @@ abstract class LargeMessageClusterSpec extends MultiNodeSpec(LargeMessageCluster
         }
       }
 
-      unreachableProbe.expectNoMessage(30.seconds)
+      unreachableProbe.expectNoMessage(60.seconds)
 
       enterBarrier("after-2")
     }

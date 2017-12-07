@@ -664,7 +664,7 @@ private[remote] class Association(
                                   streamCompleted: Future[Done], restart: () ⇒ Unit): Unit = {
 
     def lazyRestart(): Unit = {
-      outboundCompressionAccess = Vector.empty
+      outboundCompressionAccess = Vector.empty // FIXME only for ordinary messages stream
       if (queueIndex == ControlQueueIndex) {
         materializing = new CountDownLatch(1)
         _outboundControlIngress = OptionVal.None
