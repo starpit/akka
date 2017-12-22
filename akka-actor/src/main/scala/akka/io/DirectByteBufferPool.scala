@@ -35,16 +35,23 @@ private[akka] class DirectByteBufferPool(defaultBufferSize: Int, maxPoolEntries:
   def release(buf: ByteBuffer): Unit =
     offerBufferToPool(buf)
 
-  private def allocate(size: Int): ByteBuffer =
-    ByteBuffer.allocateDirect(size)
+  private def allocate(size: Int): ByteBuffer = {
+    val buffer = ByteBuffer.allocateDirect(size)
+    TLS.set(buffer)
+    buffer
+  }
+
+  private val TLS = new ThreadLocal[ByteBuffer]
 
   private final def takeBufferFromPool(): ByteBuffer = {
-    val buffer = pool.synchronized {
+    /*val buffer = pool.synchronized {
       if (buffersInPool > 0) {
         buffersInPool -= 1
         pool(buffersInPool)
       } else null
-    }
+    }*/
+
+    val buffer = TLS.get
 
     // allocate new and clear outside the lock
     if (buffer == null)
@@ -56,7 +63,7 @@ private[akka] class DirectByteBufferPool(defaultBufferSize: Int, maxPoolEntries:
   }
 
   private final def offerBufferToPool(buf: ByteBuffer): Unit = {
-    val clean =
+    /*val clean =
       pool.synchronized {
         if (buffersInPool < maxPoolEntries) {
           pool(buffersInPool) = buf
@@ -68,7 +75,7 @@ private[akka] class DirectByteBufferPool(defaultBufferSize: Int, maxPoolEntries:
         }
       }
     if (clean)
-      tryCleanDirectByteBuffer(buf)
+      tryCleanDirectByteBuffer(buf)*/
   }
 
   private final def tryCleanDirectByteBuffer(toBeDestroyed: ByteBuffer): Unit = DirectByteBufferPool.tryCleanDirectByteBuffer(toBeDestroyed)
